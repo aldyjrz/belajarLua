@@ -1,238 +1,215 @@
- 
--- Load Rayfield UI Library
+-- Unified script with auto fishing logic, teleport, inventory, and enhancements
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+
+-- Load Rayfield
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua"))()
 
--- Verify correct game ID
-local targetGameId = 6701277882
-if game.GameId ~= targetGameId then
-    Rayfield:Notify({
-        Title = "Invalid Game",
-        Content = "This script only works in Fish It.",
-        Duration = 6
-    })
-    return
-end
-
--- Services
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local VirtualUser = game:GetService("VirtualUser")
-
--- Network references
-local Net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
-local RF_ChargeFishingRod = Net:WaitForChild("RF/ChargeFishingRod")
-local RF_RequestFishingMinigameStarted = Net:WaitForChild("RF/RequestFishingMinigameStarted")
-local RE_FishingCompleted = Net:WaitForChild("RE/FishingCompleted")
-local RE_EquipRod = Net:WaitForChild("RE/EquipToolFromHotbar")
-local RE_ActivateEnchant = Net:WaitForChild("RE/ActivateEnchantingAltar")
-local RF_SellAllItems = Net:WaitForChild("RF/SellAllItems")
-
--- Flags
-local autoFishEnabled = false
-local perfectCastEnabled = true
-
--- Anti-AFK
-LocalPlayer.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-end)
-
--- UI Setup
+-- Window
 local MainUI = Rayfield:CreateWindow({
-    Name = "AldyToi | 🎋 Fish It Script",
+    Name = "Fish It Script",
     LoadingTitle = "Fish It Script",
-    LoadingSubtitle = "by AldyToi",
+    LoadingSubtitle = "by Toi",
+    Theme = "Amethyst",
     ConfigurationSaving = {
-        Enabled = false,
-        FolderName = "AldyToi",
-        FileName = "AutoFishSave"
+        Enabled = true,
+        FolderName = "QuietXHub",
+        FileName = "FishIt"
     },
     KeySystem = false
 })
 
 -- Tabs
-local devTab = MainUI:CreateTab("Developer", "airplay")
-devTab:CreateParagraph({
-    Title = "AldyToi Auto Fish It!",
-    Content = "Thanks For Using This Script!\n\nDeveloper:\n-   Instagram: @aldytoi\n- GitHub: github.com/aldyjrz\n\nKeep supporting us!"
-})
- 
+local mainTab = MainUI:CreateTab("Main")
+local playerTab = MainUI:CreateTab("Teleport")
+local settingsTab = MainUI:CreateTab("Settings")
 
-devTab:CreateButton({
-    Name = "Instagram",
-    Callback = function()
-        setclipboard("https://instagram.com/aldytoi")
-        Rayfield:Notify({
-            Title = "Instagram",
-            Content = "Link has been copied to clipboard!",
-            Duration = 3
-        })
-    end
-})
+-- Net remotes (custom networking)
+local net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
+local rodRemote = net:WaitForChild("RF/ChargeFishingRod")
+local miniGameRemote = net:WaitForChild("RF/RequestFishingMinigameStarted")
+local finishRemote = net:WaitForChild("RE/FishingCompleted")
+local equipRemote = net:WaitForChild("RE/EquipToolFromHotbar")
 
-devTab:CreateButton({
-    Name = "GitHub",
-    Callback = function()
-        setclipboard("https://github.com/aldyjrz")
-        Rayfield:Notify({
-            Title = "GitHub",
-            Content = "Link has been copied to clipboard!",
-            Duration = 3
-        })
-    end
-})
+-- Remotes
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local SellRemote = Remotes.Server:FindFirstChild("SellAll") or Remotes:FindFirstChild("SellAllItems")
+local EnchantRemote = Remotes.Server:FindFirstChild("ActivateEnchantingAltar") or Remotes:FindFirstChild("ActivateEnchant")
 
--- Auto Fish Tab
-local autoFishTab = MainUI:CreateTab("Auto Fish", "fish")
-autoFishTab:CreateToggle({
+-- State
+local autofish = false
+local perfectCast = true
+local autoRecastDelay = 1.4
+local enchantPos = Vector3.new(3231, -1303, 1402)
+
+-- Auto Fishing Toggle
+mainTab:CreateToggle({
     Name = "Enable Auto Fish",
     CurrentValue = false,
     Flag = "AutoFishToggle",
-    Callback = function(enabled)
-        autoFishEnabled = enabled
-        if not enabled then return end
+    Callback = function(value)
+        autofish = value
+        if value then
+            task.spawn(function()
+                while autofish do
+                    pcall(function()
+                        equipRemote:FireServer(1)
+                        task.wait(0.1)
 
-        task.spawn(function()
-            while autoFishEnabled do
-                RE_EquipRod:FireServer(1)
-                task.wait(0.2)
-                local chargeDuration = perfectCastEnabled and 1.3 or 0.5
-                RF_ChargeFishingRod:InvokeServer()
-                task.wait(chargeDuration)
-                RF_RequestFishingMinigameStarted:InvokeServer()
-                task.wait(1.5)
-                local hitZone = perfectCastEnabled and 0.968 or math.random()
-                RE_FishingCompleted:FireServer(hitZone)
-                task.wait(1.5)
-            end
-        end)
-    end
+                        local timestamp = perfectCast and 9999999999 or (tick() + math.random())
+                        rodRemote:InvokeServer(timestamp)
+                        task.wait(0.1)
+
+                        local x, y = -1.238, 0.969
+                        if not perfectCast then
+                            x = math.random(-1000, 1000) / 1000
+                            y = math.random(0, 1000) / 1000
+                        end
+                        miniGameRemote:InvokeServer(x, y)
+                        task.wait(1.3)
+
+                        finishRemote:FireServer()
+                    end)
+                    task.wait(autoRecastDelay)
+                end
+            end)
+        end
+    end,
 })
 
-autoFishTab:CreateToggle({
+mainTab:CreateToggle({
     Name = "Use Perfect Cast",
     CurrentValue = true,
     Flag = "PerfectCast",
-    Callback = function(state)
-        perfectCastEnabled = state
+    Callback = function(val)
+        perfectCast = val
+    end,
+})
+
+mainTab:CreateSlider({
+    Name = "Auto Recast Delay (seconds)",
+    Range = {0.5, 5},
+    Increment = 0.1,
+    CurrentValue = autoRecastDelay,
+    Callback = function(val)
+        autoRecastDelay = val
     end
 })
 
-autoFishTab:CreateButton({
-    Name = "Manual Perfect Cast Now",
+-- Auto Sell
+mainTab:CreateButton({
+    Name = "Sell All Fishes",
     Callback = function()
-        RE_EquipRod:FireServer(1)
-        task.wait(0.2)
-        RF_ChargeFishingRod:InvokeServer()
-        task.wait(1.3)
-        RF_RequestFishingMinigameStarted:InvokeServer()
-        task.wait(1.5)
-        RE_FishingCompleted:FireServer(0.968)
+        if SellRemote then
+            SellRemote:FireServer()
+            Rayfield:Notify({ Title = "Auto Sell", Content = "All fish have been sold.", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Auto Sell", Content = "Sell remote not found!", Duration = 3 })
+        end
     end
 })
 
--- Feature Guide Tab
-local guideTab = MainUI:CreateTab("Feature Guide", "book-text")
-guideTab:CreateParagraph({
-    Title = "All Features Guide",
-    Content = "====| Auto Enchant Rod |====\n\nTo use Enchant Rod:\n1. Place Enchant Stone in Slot 5\n2. Make sure rod is equipped\n3. Press Auto Enchant\n\n====| Rod Modifier |====\nEach rod can only be changed once.\nMaximum boost is 1.5x.\nReset your character for changes to apply.\n\n====| Tab Event |====\nEvent Codes:\n1 = Ghost Shark Hunt\n2 = Shark Hunt\nEnter code in Event tab to teleport."
-})
-
--- Auto Enchant Tab
-local enchantPos = Vector3.new(3231, -1303, 1402)
-autoFishTab:CreateButton({
+-- Enchant Rod
+mainTab:CreateButton({
     Name = "Auto Enchant Rod",
     Callback = function()
-        local character = workspace:WaitForChild("Characters"):FindFirstChild(LocalPlayer.Name)
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        if not root then
-            Rayfield:Notify({
-                Title = "Auto Enchant Rod",
-                Content = "Failed to find character HumanoidRootPart.",
-                Duration = 3
-            })
-            return
-        end
-        Rayfield:Notify({
-            Title = "🔧 Enchanting...",
-            Content = "Please wait while the enchantment completes.",
-            Duration = 7
-        })
-        task.wait(1)
-        root.CFrame = CFrame.new(enchantPos + Vector3.new(0, 5, 0))
+        local char = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        hrp.CFrame = CFrame.new(enchantPos + Vector3.new(0, 5, 0))
         task.wait(1.2)
-        RE_EquipRod:FireServer(5) -- slot 5 is for Enchant Stone
-        task.wait(0.5)
-        RE_ActivateEnchant:FireServer()
-        task.wait(7)
-        Rayfield:Notify({
-            Title = "Enchant",
-            Content = "Successfully Enchanted!",
-            Duration = 3
-        })
-    end
-})
 
--- Sell Fish Button
-autoFishTab:CreateButton({
-    Name = "Sell All Fishes",
-    Info = "Automatically sell all Fishes",
-    Callback = function()
-        local character = workspace:FindFirstChild("Characters")
-        local playerChar = character and character:FindFirstChild(LocalPlayer.Name)
-        local hrp = playerChar and playerChar:FindFirstChild("HumanoidRootPart")
-        if not hrp then
-            Rayfield:Notify({
-                Title = "Sell Fish",
-                Content = "HumanoidRootPart not found.",
-                Duration = 3
-            })
-            return
+        if EnchantRemote then
+            EnchantRemote:FireServer()
+            Rayfield:Notify({ Title = "Enchant", Content = "Enchantment Activated!", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Enchant", Content = "Enchant remote not found!", Duration = 3 })
         end
-        local sellPos = Vector3.new(-32, 5, 2885)
-        hrp.CFrame = CFrame.new(sellPos)
-        task.wait(1)
-        pcall(function()
-            RF_SellAllItems:InvokeServer()
-        end)
-        Rayfield:Notify({
-            Title = "Sell Fish",
-            Content = "All the fish were sold successfully.",
-            Duration = 4
-        })
     end
 })
 
--- Teleport to Player Tab
-local playerTab = MainUI:CreateTab("Player", "users-round")
+-- Inventory Print
+mainTab:CreateButton({
+    Name = "Print Inventory to Console",
+    Callback = function()
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            print("-- INVENTORY CONTENTS --")
+            for _, item in pairs(backpack:GetChildren()) do
+                print(item.Name)
+            end
+        else
+            print("Backpack not found!")
+        end
+    end
+})
+
+-- NPC List Teleport
+local npcList = {}
+for _, model in ipairs(Workspace:GetDescendants()) do
+    if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
+        table.insert(npcList, model.Name)
+    end
+end
+
+playerTab:CreateDropdown({
+    Name = "Teleport to NPC",
+    Options = npcList,
+    CurrentOption = nil,
+    Callback = function(selected)
+        for _, npc in ipairs(Workspace:GetDescendants()) do
+            if npc:IsA("Model") and npc.Name == selected and npc:FindFirstChild("HumanoidRootPart") then
+                local myChar = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
+                local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                if myHRP then
+                    myHRP.CFrame = npc.HumanoidRootPart.CFrame
+                    Rayfield:Notify({ Title = "Teleport", Content = "Teleported to NPC: " .. selected, Duration = 3 })
+                end
+                break
+            end
+        end
+    end
+})
+
+-- Manual Teleport Input
 playerTab:CreateInput({
-    Name = "Teleport to Player",
-    PlaceholderText = "Example: Prince",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(name)
-        local function teleportToPlayer(targetName)
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Name:lower() == targetName:lower() or p.DisplayName:lower() == targetName:lower() then
-                    local char = workspace:FindFirstChild("Characters"):FindFirstChild(p.Name)
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        local myChar = workspace:FindFirstChild("Characters"):FindFirstChild(LocalPlayer.Name)
-                        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                        if myHrp then
-                            myHrp.CFrame = hrp.CFrame
-                            Rayfield:Notify({
-                                Title = "Teleport",
-                                Content = "Successfully Teleported to " .. p.DisplayName,
-                                Duration = 3
-                            })
-                        end
-                    end
-                    break
+    Name = "Teleport to Player/NPC",
+    PlaceholderText = "Enter name...",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(targetName)
+        local function teleportToTarget(hrp, label)
+            local myChar = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myHRP and hrp then
+                myHRP.CFrame = hrp.CFrame
+                Rayfield:Notify({ Title = "Teleport", Content = "Teleported to " .. label, Duration = 3 })
+            end
+        end
+
+        for _, player in pairs(Players:GetPlayers()) do
+            if player.Name:lower() == targetName:lower() or player.DisplayName:lower() == targetName:lower() then
+                local targetChar = Workspace.Characters:FindFirstChild(player.Name)
+                local hrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+                teleportToTarget(hrp, player.DisplayName)
+                return
+            end
+        end
+
+        for _, descendant in pairs(Workspace:GetDescendants()) do
+            if descendant:IsA("Model") and descendant:FindFirstChild("HumanoidRootPart") then
+                if descendant.Name:lower():find(targetName:lower()) then
+                    teleportToTarget(descendant.HumanoidRootPart, descendant.Name)
+                    return
                 end
             end
         end
-        teleportToPlayer(name)
+
+        Rayfield:Notify({ Title = "Teleport", Content = "Target not found: " .. targetName, Duration = 3 })
     end
 })
