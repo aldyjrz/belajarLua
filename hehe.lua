@@ -6,15 +6,17 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 
 -- Load Rayfield
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua"))()
 
 -- Window
-local MainUI = Rayfield:CreateWindow({
+local Window = Rayfield:CreateWindow({
     Name = "Fish It Script",
     LoadingTitle = "Fish It Script",
-    LoadingSubtitle = "by Toi",
+    LoadingSubtitle = "by Prince",
     Theme = "Amethyst",
     ConfigurationSaving = {
         Enabled = true,
@@ -25,18 +27,19 @@ local MainUI = Rayfield:CreateWindow({
 })
 
 -- Tabs
-local mainTab = MainUI:CreateTab("Main")
-local playerTab = MainUI:CreateTab("Teleport")
-local settingsTab = MainUI:CreateTab("Settings")
+local MainTab = Window:CreateTab("Auto Fish", "fish")
+local PlayerTab = Window:CreateTab("Player", "users-round")
+local IslandsTab = Window:CreateTab("Islands", "map")
+local SettingsTab = Window:CreateTab("Settings", "cog")
+local DevTab = Window:CreateTab("Developer", "airplay")
 
--- Net remotes (custom networking)
+-- Remotes
 local net = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("_Index"):WaitForChild("sleitnick_net@0.2.0"):WaitForChild("net")
 local rodRemote = net:WaitForChild("RF/ChargeFishingRod")
 local miniGameRemote = net:WaitForChild("RF/RequestFishingMinigameStarted")
 local finishRemote = net:WaitForChild("RE/FishingCompleted")
 local equipRemote = net:WaitForChild("RE/EquipToolFromHotbar")
 
--- Remotes
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SellRemote = Remotes.Server:FindFirstChild("SellAll") or Remotes:FindFirstChild("SellAllItems")
 local EnchantRemote = Remotes.Server:FindFirstChild("ActivateEnchantingAltar") or Remotes:FindFirstChild("ActivateEnchant")
@@ -44,17 +47,36 @@ local EnchantRemote = Remotes.Server:FindFirstChild("ActivateEnchantingAltar") o
 -- State
 local autofish = false
 local perfectCast = true
+local ijump = false
 local autoRecastDelay = 1.4
 local enchantPos = Vector3.new(3231, -1303, 1402)
 
--- Auto Fishing Toggle
-mainTab:CreateToggle({
+local function NotifySuccess(title, message)
+	Rayfield:Notify({ Title = title, Content = message, Duration = 3, Image = "circle-check" })
+end
+
+local function NotifyError(title, message)
+	Rayfield:Notify({ Title = title, Content = message, Duration = 3, Image = "ban" })
+end
+
+-- Developer Info
+DevTab:CreateParagraph({
+    Title = "QuietXDev by Prince",
+    Content = "Thanks For Using This Script!\n\nDeveloper:\n- Discord: discord.gg/2aMDrb92kf\n- Instagram: @quietxdev\n- GitHub: github.com/ohmygod-king\n\nKeep supporting us!"
+})
+
+DevTab:CreateButton({ Name = "Discord Server", Callback = function() setclipboard("https://discord.gg/2aMDrb92kf") NotifySuccess("Link Discord", "Copied to clipboard!") end })
+DevTab:CreateButton({ Name = "Instagram", Callback = function() setclipboard("https://instagram.com/quietxdev") NotifySuccess("Link Instagram", "Copied to clipboard!") end })
+DevTab:CreateButton({ Name = "GitHub", Callback = function() setclipboard("https://github.com/ohmygod-king") NotifySuccess("Link GitHub", "Copied to clipboard!") end })
+
+-- Auto Fishing
+MainTab:CreateToggle({
     Name = "Enable Auto Fish",
     CurrentValue = false,
     Flag = "AutoFishToggle",
-    Callback = function(value)
-        autofish = value
-        if value then
+    Callback = function(val)
+        autofish = val
+        if val then
             task.spawn(function()
                 while autofish do
                     pcall(function()
@@ -79,19 +101,19 @@ mainTab:CreateToggle({
                 end
             end)
         end
-    end,
+    end
 })
 
-mainTab:CreateToggle({
+MainTab:CreateToggle({
     Name = "Use Perfect Cast",
     CurrentValue = true,
     Flag = "PerfectCast",
     Callback = function(val)
         perfectCast = val
-    end,
+    end
 })
 
-mainTab:CreateSlider({
+MainTab:CreateSlider({
     Name = "Auto Recast Delay (seconds)",
     Range = {0.5, 5},
     Increment = 0.1,
@@ -101,41 +123,37 @@ mainTab:CreateSlider({
     end
 })
 
--- Auto Sell
-mainTab:CreateButton({
+MainTab:CreateButton({
     Name = "Sell All Fishes",
     Callback = function()
         if SellRemote then
             SellRemote:FireServer()
-            Rayfield:Notify({ Title = "Auto Sell", Content = "All fish have been sold.", Duration = 3 })
+            NotifySuccess("Auto Sell", "All fish have been sold.")
         else
-            Rayfield:Notify({ Title = "Auto Sell", Content = "Sell remote not found!", Duration = 3 })
+            NotifyError("Auto Sell", "Sell remote not found!")
         end
     end
 })
 
--- Enchant Rod
-mainTab:CreateButton({
+MainTab:CreateButton({
     Name = "Auto Enchant Rod",
     Callback = function()
         local char = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-
-        hrp.CFrame = CFrame.new(enchantPos + Vector3.new(0, 5, 0))
-        task.wait(1.2)
-
-        if EnchantRemote then
-            EnchantRemote:FireServer()
-            Rayfield:Notify({ Title = "Enchant", Content = "Enchantment Activated!", Duration = 3 })
-        else
-            Rayfield:Notify({ Title = "Enchant", Content = "Enchant remote not found!", Duration = 3 })
+        if hrp then
+            hrp.CFrame = CFrame.new(enchantPos + Vector3.new(0, 5, 0))
+            task.wait(1.2)
+            if EnchantRemote then
+                EnchantRemote:FireServer()
+                NotifySuccess("Enchant", "Enchantment Activated!")
+            else
+                NotifyError("Enchant", "Enchant remote not found!")
+            end
         end
     end
 })
 
--- Inventory Print
-mainTab:CreateButton({
+MainTab:CreateButton({
     Name = "Print Inventory to Console",
     Callback = function()
         local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -150,66 +168,102 @@ mainTab:CreateButton({
     end
 })
 
--- NPC List Teleport
-local npcList = {}
-for _, model in ipairs(Workspace:GetDescendants()) do
-    if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
-        table.insert(npcList, model.Name)
+PlayerTab:CreateToggle({
+    Name = "Infinity Jump",
+    CurrentValue = false,
+    Flag = "InfinityJump",
+    Callback = function(val)
+        ijump = val
     end
+})
+
+UserInputService.JumpRequest:Connect(function()
+    if ijump and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+    end
+end)
+
+PlayerTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 150},
+    Increment = 1,
+    CurrentValue = 16,
+    Flag = "WalkSpeed",
+    Callback = function(val)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = val end
+    end
+})
+
+PlayerTab:CreateSlider({
+    Name = "Jump Power",
+    Range = {50, 500},
+    Increment = 10,
+    CurrentValue = 35,
+    Flag = "JumpPower",
+    Callback = function(val)
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.UseJumpPower = true
+            hum.JumpPower = val
+        end
+    end
+})
+
+local islandCoords = {
+    ["01"] = { name = "Weather Machine", position = Vector3.new(-1471, -3, 1929) },
+    ["02"] = { name = "Esoteric Depths", position = Vector3.new(3157, -1303, 1439) },
+    ["03"] = { name = "Tropical Grove", position = Vector3.new(-2038, 3, 3650) },
+    ["04"] = { name = "Stingray Shores", position = Vector3.new(-32, 4, 2773) },
+    ["05"] = { name = "Kohana Volcano", position = Vector3.new(-519, 24, 189) },
+    ["06"] = { name = "Coral Reefs", position = Vector3.new(-3095, 1, 2177) },
+    ["07"] = { name = "Crater Island", position = Vector3.new(968, 1, 4854) },
+    ["08"] = { name = "Kohana", position = Vector3.new(-658, 3, 719) },
+    ["09"] = { name = "Winter Fest", position = Vector3.new(1611, 4, 3280) },
+    ["10"] = { name = "Isoteric Island", position = Vector3.new(1987, 4, 1400) }
+}
+
+for _, data in pairs(islandCoords) do
+    IslandsTab:CreateButton({
+        Name = data.name,
+        Callback = function()
+            local char = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = CFrame.new(data.position + Vector3.new(0, 5, 0))
+                NotifySuccess("Teleported!", "You are now at " .. data.name)
+            else
+                NotifyError("Teleport Failed", "Character or HRP not found!")
+            end
+        end
+    })
 end
 
-playerTab:CreateDropdown({
-    Name = "Teleport to NPC",
-    Options = npcList,
-    CurrentOption = nil,
-    Callback = function(selected)
-        for _, npc in ipairs(Workspace:GetDescendants()) do
-            if npc:IsA("Model") and npc.Name == selected and npc:FindFirstChild("HumanoidRootPart") then
-                local myChar = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
-                local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                if myHRP then
-                    myHRP.CFrame = npc.HumanoidRootPart.CFrame
-                    Rayfield:Notify({ Title = "Teleport", Content = "Teleported to NPC: " .. selected, Duration = 3 })
-                end
-                break
-            end
-        end
-    end
-})
-
--- Manual Teleport Input
-playerTab:CreateInput({
-    Name = "Teleport to Player/NPC",
-    PlaceholderText = "Enter name...",
-    RemoveTextAfterFocusLost = true,
-    Callback = function(targetName)
-        local function teleportToTarget(hrp, label)
-            local myChar = Workspace.Characters:FindFirstChild(LocalPlayer.Name)
-            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if myHRP and hrp then
-                myHRP.CFrame = hrp.CFrame
-                Rayfield:Notify({ Title = "Teleport", Content = "Teleported to " .. label, Duration = 3 })
-            end
-        end
-
-        for _, player in pairs(Players:GetPlayers()) do
-            if player.Name:lower() == targetName:lower() or player.DisplayName:lower() == targetName:lower() then
-                local targetChar = Workspace.Characters:FindFirstChild(player.Name)
-                local hrp = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-                teleportToTarget(hrp, player.DisplayName)
-                return
-            end
-        end
-
-        for _, descendant in pairs(Workspace:GetDescendants()) do
-            if descendant:IsA("Model") and descendant:FindFirstChild("HumanoidRootPart") then
-                if descendant.Name:lower():find(targetName:lower()) then
-                    teleportToTarget(descendant.HumanoidRootPart, descendant.Name)
-                    return
+SettingsTab:CreateButton({ Name = "Rejoin Server", Callback = function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end })
+SettingsTab:CreateButton({ Name = "Server Hop (New Server)", Callback = function()
+    local placeId = game.PlaceId
+    local servers, cursor = {}, ""
+    repeat
+        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100" .. (cursor ~= "" and "&cursor=" .. cursor or "")
+        local success, result = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
+        if success and result and result.data then
+            for _, server in pairs(result.data) do
+                if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    table.insert(servers, server.id)
                 end
             end
+            cursor = result.nextPageCursor or ""
+        else
+            break
         end
+    until not cursor or #servers > 0
 
-        Rayfield:Notify({ Title = "Teleport", Content = "Target not found: " .. targetName, Duration = 3 })
+    if #servers > 0 then
+        local targetServer = servers[math.random(1, #servers)]
+        TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
+    else
+        NotifyError("Server Hop Failed", "No available servers found!")
     end
-})
+end })
